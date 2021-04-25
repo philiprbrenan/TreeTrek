@@ -15,7 +15,7 @@ use feature qw(say current_sub);
 
 my $debug = -e q(/home/phil/);                                                  # Developing
 
-#D1 Tree::Trek                                                                  # Methods to create a  trekkable tree.
+#D1 Tree::Trek                                                                  # Methods to create and traverse a trekkable tree.
 
 sub node(;$$)                                                                   # Create a new node
  {my ($parent, $char) = @_;                                                     # Optional parent, character we came through on
@@ -32,20 +32,27 @@ sub put($$)                                                                     
 
   return $tree unless $key;                                                     # Key is empty so we have found the desired node
 
-  my $c = substr $key, 0, 1;                                                    # Next character of the key
+  for my $i(1..length $key)                                                     # Jump on each character
+   {my $c = substr $key, $i-1, 1;                                               # Next character of the key
 
-  if (exists $tree->jumps->{$c})                                                # Jump through existing node
-   {return $tree->jumps->{$c}->put(substr $key, 1);
+    if (exists $tree->jumps->{$c})                                              # Jump through existing node
+     {$tree = $tree->jumps->{$c};
+     }
+    else                                                                        # Create a new node and jump through it
+     {$tree = ($tree->jumps->{$c} = node $tree, $c);
+     }
    }
-  else                                                                          # Create a new node and jump through it
-   {my $n = $tree->jumps->{$c} = node $tree, $c;
-    return $n->put(substr $key, 1);
-   }
+
+  $tree                                                                         # Last node we reached at the end of the string
  }
 
 sub key($)                                                                      # Return the key of a node
  {my ($node) = @_;                                                              # Node
-  ($node->parent ? $node->parent->key : '') . $node->char
+  my $k = '';
+  for(my $n = $node; $n; $n = $n->parent)
+   {$k .= $n->char
+   }
+  scalar reverse $k;
  }
 
 sub find($$)                                                                    # Find a key in a tree - return its node if such a node exists else undef
@@ -53,27 +60,29 @@ sub find($$)                                                                    
 
   return $tree unless $key;                                                     # We have exhausted the key so this must be the node in question as long as it has no jumps
 
-  my $c = substr $key, 0, 1;
-
-  if (exists $tree->jumps->{$c})                                                # Continue search
-   {return $tree->jumps->{$c}->find(substr $key, 1);
+  for my $i(1..length $key)                                                     # Jump on each character
+   {my $c = substr $key, $i-1, 1;                                               # Next character of the key
+    if (exists $tree->jumps->{$c})                                              # Continue search
+     {$tree = $tree->jumps->{$c};
+      next;
+     }
+    return undef;                                                               # No such jump
    }
-  undef                                                                         # Not found
+  $tree                                                                         # Not found
  }
 
 sub delete($)                                                                   # Remove a node from a tree
  {my ($node) = @_;                                                              # Node to be removed
 
-  my $clear = sub                                                               # Clear the parent's jumps if possible
-   {my ($child) = @_;                                                           # Child of parent
-    if (my $p = $child->parent)                                                 # Not the root
-     {delete $p->jumps->{$child->char};                                         # Delete path to empty node
-      __SUB__->($p) unless keys $p->jumps->%*;                                  # Repeat for parent if this node is now empty
-     }
-   };
-
   $node->data = undef;                                                          # Clear data
-  $clear->($node) unless (keys $node->jumps->%*);                               # No jumps from this node and no data so we can clear it from the parent
+  if (! keys $node->jumps->%*)                                                  # No jumps from this node and no data so we can clear it from the parent
+   {for(my $n = $node; $n; $n = $n->parent)                                     # Up through ancestors
+     {if (my $p = $n->parent)                                                   # Parent of current node
+       {delete $p->jumps->{$n->char};                                           # Delete path to empty node
+        last if keys $p->jumps->%*;                                             # Repeat for parent if this node is now empty
+       }
+     }
+   }
   $node
  }
 
@@ -98,7 +107,7 @@ sub traverse($)                                                                 
 
 #d
 #-------------------------------------------------------------------------------
-# Export - eeee
+# Export
 #-------------------------------------------------------------------------------
 
 use Exporter qw(import);
