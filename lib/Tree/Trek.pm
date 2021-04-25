@@ -17,12 +17,13 @@ my $debug = -e q(/home/phil/);                                                  
 
 #D1 Tree::Trek                                                                  # Methods to create a  trekkable tree.
 
-sub node(;$)                                                                    # Create a new node
- {my ($parent) = @_;                                                            # Optional parent
+sub node(;$$)                                                                   # Create a new node
+ {my ($parent, $char) = @_;                                                     # Optional parent, character we came through on
   genHash(__PACKAGE__,
     jumps  => {},                                                               # {character => node}
     data   => undef,                                                            # The data attached to this node
     parent => $parent,                                                          # The node from whence we came
+    char   => $char//'',                                                        # The character we trekked in on or the empty string if we are at the root
    );
  }
 
@@ -37,22 +38,14 @@ sub put($$)                                                                     
    {return $tree->jumps->{$c}->put(substr $key, 1);
    }
   else                                                                          # Create a new node and jump through it
-   {my $n = $tree->jumps->{$c} = node $tree;
+   {my $n = $tree->jumps->{$c} = node $tree, $c;
     return $n->put(substr $key, 1);
    }
  }
 
 sub key($)                                                                      # Return the key of a node
  {my ($node) = @_;                                                              # Node
-  if (my $p = $node->parent)
-   {for my $c(sort keys $p->jumps->%*)
-     {if ($p->jumps->{$c} == $node)
-       {return $p->key . $c;
-       }
-     }
-    confess "Child missing in parent";                                          # This should not happen
-   }
-  ''                                                                            # The key of the root node
+  ($node->parent ? $node->parent->key : '') . $node->char
  }
 
 sub find($$)                                                                    # Find a key in a tree - return its node if such a node exists else undef
@@ -73,13 +66,9 @@ sub delete($)                                                                   
 
   my $clear = sub                                                               # Clear the parent's jumps if possible
    {my ($child) = @_;                                                           # Child of parent
-    if (my $p = $child->parent)
-     {for my $c(keys $p->jumps->%*)
-       {if ($p->jumps->{$c} == $child)
-         {delete $p->jumps->{$c};
-         }
-       }
-      __SUB__->($p) unless keys $p->jumps->%*;
+    if (my $p = $child->parent)                                                 # Not the root
+     {delete $p->jumps->{$child->char};                                         # Delete path to empty node
+      __SUB__->($p) unless keys $p->jumps->%*;                                  # Repeat for parent if this node is now empty
      }
    };
 
@@ -177,8 +166,8 @@ Create a new node
 B<Example:>
 
 
-  if (1)                                                                                
-  
+  if (1)
+
    {my $n = node;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
     $n->put("aa")->data = "AA";
@@ -187,38 +176,38 @@ B<Example:>
     $n->put("bb")->data = "BB";
     $n->put("aaa")->data = "AAA";
     is_deeply $n->count, 5;
-  
+
     is_deeply $n->find("aa") ->data, "AA";
     is_deeply $n->find("ab") ->data, "AB";
     is_deeply $n->find("ba") ->data, "BA";
     is_deeply $n->find("bb") ->data, "BB";
     is_deeply $n->find("aaa")->data, "AAA";
-  
+
     is_deeply [map {[$_->key, $_->data]} $n->traverse],
      [["aa",  "AA"],
       ["aaa", "AAA"],
       ["ab",  "AB"],
       ["ba",  "BA"],
       ["bb",  "BB"]];
-  
+
     ok  $n->find("a");
     ok !$n->find("a")->data;
     ok  $n->find("b");
     ok !$n->find("b")->data;
     ok !$n->find("c");
-  
+
     ok $n->find("aa")->delete;  ok  $n->find("aa");  is_deeply $n->count, 4;
     ok $n->find("ab")->delete;  ok !$n->find("ab");  is_deeply $n->count, 3;
     ok $n->find("ba")->delete;  ok !$n->find("ba");  is_deeply $n->count, 2;
     ok $n->find("bb")->delete;  ok !$n->find("bb");  is_deeply $n->count, 1;
-  
+
     ok  $n->find("a");
     ok !$n->find("b");
-  
+
     ok $n->find("aaa")->delete; ok !$n->find("aaa"); is_deeply $n->count, 0;
     ok  !$n->find("a");
    }
-  
+
 
 =head2 put($tree, $key)
 
@@ -231,56 +220,56 @@ Add a key to the tree
 B<Example:>
 
 
-  if (1)                                                                                
+  if (1)
    {my $n = node;
-  
+
     $n->put("aa")->data = "AA";  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     $n->put("ab")->data = "AB";  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     $n->put("ba")->data = "BA";  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     $n->put("bb")->data = "BB";  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     $n->put("aaa")->data = "AAA";  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
     is_deeply $n->count, 5;
-  
+
     is_deeply $n->find("aa") ->data, "AA";
     is_deeply $n->find("ab") ->data, "AB";
     is_deeply $n->find("ba") ->data, "BA";
     is_deeply $n->find("bb") ->data, "BB";
     is_deeply $n->find("aaa")->data, "AAA";
-  
+
     is_deeply [map {[$_->key, $_->data]} $n->traverse],
      [["aa",  "AA"],
       ["aaa", "AAA"],
       ["ab",  "AB"],
       ["ba",  "BA"],
       ["bb",  "BB"]];
-  
+
     ok  $n->find("a");
     ok !$n->find("a")->data;
     ok  $n->find("b");
     ok !$n->find("b")->data;
     ok !$n->find("c");
-  
+
     ok $n->find("aa")->delete;  ok  $n->find("aa");  is_deeply $n->count, 4;
     ok $n->find("ab")->delete;  ok !$n->find("ab");  is_deeply $n->count, 3;
     ok $n->find("ba")->delete;  ok !$n->find("ba");  is_deeply $n->count, 2;
     ok $n->find("bb")->delete;  ok !$n->find("bb");  is_deeply $n->count, 1;
-  
+
     ok  $n->find("a");
     ok !$n->find("b");
-  
+
     ok $n->find("aaa")->delete; ok !$n->find("aaa"); is_deeply $n->count, 0;
     ok  !$n->find("a");
    }
-  
+
 
 =head2 key($node)
 
@@ -292,7 +281,7 @@ Return the key of a node
 B<Example:>
 
 
-  if (1)                                                                                
+  if (1)
    {my $n = node;
     $n->put("aa")->data = "AA";
     $n->put("ab")->data = "AB";
@@ -300,14 +289,14 @@ B<Example:>
     $n->put("bb")->data = "BB";
     $n->put("aaa")->data = "AAA";
     is_deeply $n->count, 5;
-  
+
     is_deeply $n->find("aa") ->data, "AA";
     is_deeply $n->find("ab") ->data, "AB";
     is_deeply $n->find("ba") ->data, "BA";
     is_deeply $n->find("bb") ->data, "BB";
     is_deeply $n->find("aaa")->data, "AAA";
-  
-  
+
+
     is_deeply [map {[$_->key, $_->data]} $n->traverse],  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
      [["aa",  "AA"],
@@ -315,25 +304,25 @@ B<Example:>
       ["ab",  "AB"],
       ["ba",  "BA"],
       ["bb",  "BB"]];
-  
+
     ok  $n->find("a");
     ok !$n->find("a")->data;
     ok  $n->find("b");
     ok !$n->find("b")->data;
     ok !$n->find("c");
-  
+
     ok $n->find("aa")->delete;  ok  $n->find("aa");  is_deeply $n->count, 4;
     ok $n->find("ab")->delete;  ok !$n->find("ab");  is_deeply $n->count, 3;
     ok $n->find("ba")->delete;  ok !$n->find("ba");  is_deeply $n->count, 2;
     ok $n->find("bb")->delete;  ok !$n->find("bb");  is_deeply $n->count, 1;
-  
+
     ok  $n->find("a");
     ok !$n->find("b");
-  
+
     ok $n->find("aaa")->delete; ok !$n->find("aaa"); is_deeply $n->count, 0;
     ok  !$n->find("a");
    }
-  
+
 
 =head2 find($tree, $key)
 
@@ -346,7 +335,7 @@ Find a key in a tree - return its node if such a node exists else undef
 B<Example:>
 
 
-  if (1)                                                                                
+  if (1)
    {my $n = node;
     $n->put("aa")->data = "AA";
     $n->put("ab")->data = "AB";
@@ -354,74 +343,74 @@ B<Example:>
     $n->put("bb")->data = "BB";
     $n->put("aaa")->data = "AAA";
     is_deeply $n->count, 5;
-  
-  
+
+
     is_deeply $n->find("aa") ->data, "AA";  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     is_deeply $n->find("ab") ->data, "AB";  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     is_deeply $n->find("ba") ->data, "BA";  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     is_deeply $n->find("bb") ->data, "BB";  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     is_deeply $n->find("aaa")->data, "AAA";  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     is_deeply [map {[$_->key, $_->data]} $n->traverse],
      [["aa",  "AA"],
       ["aaa", "AAA"],
       ["ab",  "AB"],
       ["ba",  "BA"],
       ["bb",  "BB"]];
-  
-  
+
+
     ok  $n->find("a");  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok !$n->find("a")->data;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok  $n->find("b");  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok !$n->find("b")->data;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok !$n->find("c");  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
-  
+
+
     ok $n->find("aa")->delete;  ok  $n->find("aa");  is_deeply $n->count, 4;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok $n->find("ab")->delete;  ok !$n->find("ab");  is_deeply $n->count, 3;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok $n->find("ba")->delete;  ok !$n->find("ba");  is_deeply $n->count, 2;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok $n->find("bb")->delete;  ok !$n->find("bb");  is_deeply $n->count, 1;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
-  
+
+
     ok  $n->find("a");  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok !$n->find("b");  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
-  
+
+
     ok $n->find("aaa")->delete; ok !$n->find("aaa"); is_deeply $n->count, 0;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok  !$n->find("a");  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
    }
-  
+
 
 =head2 delete($node)
 
@@ -433,7 +422,7 @@ Remove a node from a tree
 B<Example:>
 
 
-  if (1)                                                                                
+  if (1)
    {my $n = node;
     $n->put("aa")->data = "AA";
     $n->put("ab")->data = "AB";
@@ -441,48 +430,48 @@ B<Example:>
     $n->put("bb")->data = "BB";
     $n->put("aaa")->data = "AAA";
     is_deeply $n->count, 5;
-  
+
     is_deeply $n->find("aa") ->data, "AA";
     is_deeply $n->find("ab") ->data, "AB";
     is_deeply $n->find("ba") ->data, "BA";
     is_deeply $n->find("bb") ->data, "BB";
     is_deeply $n->find("aaa")->data, "AAA";
-  
+
     is_deeply [map {[$_->key, $_->data]} $n->traverse],
      [["aa",  "AA"],
       ["aaa", "AAA"],
       ["ab",  "AB"],
       ["ba",  "BA"],
       ["bb",  "BB"]];
-  
+
     ok  $n->find("a");
     ok !$n->find("a")->data;
     ok  $n->find("b");
     ok !$n->find("b")->data;
     ok !$n->find("c");
-  
-  
+
+
     ok $n->find("aa")->delete;  ok  $n->find("aa");  is_deeply $n->count, 4;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok $n->find("ab")->delete;  ok !$n->find("ab");  is_deeply $n->count, 3;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok $n->find("ba")->delete;  ok !$n->find("ba");  is_deeply $n->count, 2;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok $n->find("bb")->delete;  ok !$n->find("bb");  is_deeply $n->count, 1;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok  $n->find("a");
     ok !$n->find("b");
-  
-  
+
+
     ok $n->find("aaa")->delete; ok !$n->find("aaa"); is_deeply $n->count, 0;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
     ok  !$n->find("a");
    }
-  
+
 
 =head2 count($node)
 
@@ -494,58 +483,58 @@ Count the nodes addressed in the specified tree
 B<Example:>
 
 
-  if (1)                                                                                
+  if (1)
    {my $n = node;
     $n->put("aa")->data = "AA";
     $n->put("ab")->data = "AB";
     $n->put("ba")->data = "BA";
     $n->put("bb")->data = "BB";
     $n->put("aaa")->data = "AAA";
-  
+
     is_deeply $n->count, 5;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     is_deeply $n->find("aa") ->data, "AA";
     is_deeply $n->find("ab") ->data, "AB";
     is_deeply $n->find("ba") ->data, "BA";
     is_deeply $n->find("bb") ->data, "BB";
     is_deeply $n->find("aaa")->data, "AAA";
-  
+
     is_deeply [map {[$_->key, $_->data]} $n->traverse],
      [["aa",  "AA"],
       ["aaa", "AAA"],
       ["ab",  "AB"],
       ["ba",  "BA"],
       ["bb",  "BB"]];
-  
+
     ok  $n->find("a");
     ok !$n->find("a")->data;
     ok  $n->find("b");
     ok !$n->find("b")->data;
     ok !$n->find("c");
-  
-  
+
+
     ok $n->find("aa")->delete;  ok  $n->find("aa");  is_deeply $n->count, 4;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok $n->find("ab")->delete;  ok !$n->find("ab");  is_deeply $n->count, 3;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok $n->find("ba")->delete;  ok !$n->find("ba");  is_deeply $n->count, 2;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok $n->find("bb")->delete;  ok !$n->find("bb");  is_deeply $n->count, 1;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
-  
+
     ok  $n->find("a");
     ok !$n->find("b");
-  
-  
+
+
     ok $n->find("aaa")->delete; ok !$n->find("aaa"); is_deeply $n->count, 0;  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
     ok  !$n->find("a");
    }
-  
+
 
 =head2 traverse($node)
 
@@ -557,7 +546,7 @@ Traverse a tree returning an array of nodes
 B<Example:>
 
 
-  if (1)                                                                                
+  if (1)
    {my $n = node;
     $n->put("aa")->data = "AA";
     $n->put("ab")->data = "AB";
@@ -565,14 +554,14 @@ B<Example:>
     $n->put("bb")->data = "BB";
     $n->put("aaa")->data = "AAA";
     is_deeply $n->count, 5;
-  
+
     is_deeply $n->find("aa") ->data, "AA";
     is_deeply $n->find("ab") ->data, "AB";
     is_deeply $n->find("ba") ->data, "BA";
     is_deeply $n->find("bb") ->data, "BB";
     is_deeply $n->find("aaa")->data, "AAA";
-  
-  
+
+
     is_deeply [map {[$_->key, $_->data]} $n->traverse],  # 𝗘𝘅𝗮𝗺𝗽𝗹𝗲
 
      [["aa",  "AA"],
@@ -580,25 +569,25 @@ B<Example:>
       ["ab",  "AB"],
       ["ba",  "BA"],
       ["bb",  "BB"]];
-  
+
     ok  $n->find("a");
     ok !$n->find("a")->data;
     ok  $n->find("b");
     ok !$n->find("b")->data;
     ok !$n->find("c");
-  
+
     ok $n->find("aa")->delete;  ok  $n->find("aa");  is_deeply $n->count, 4;
     ok $n->find("ab")->delete;  ok !$n->find("ab");  is_deeply $n->count, 3;
     ok $n->find("ba")->delete;  ok !$n->find("ba");  is_deeply $n->count, 2;
     ok $n->find("bb")->delete;  ok !$n->find("bb");  is_deeply $n->count, 1;
-  
+
     ok  $n->find("a");
     ok !$n->find("b");
-  
+
     ok $n->find("aaa")->delete; ok !$n->find("aaa"); is_deeply $n->count, 0;
     ok  !$n->find("a");
    }
-  
+
 
 
 =head1 Index
