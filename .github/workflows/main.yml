@@ -1,0 +1,29 @@
+# Test TreeTrek 2021-04-25 at 05:18:37
+
+name: Test
+
+on:
+  push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install Data::Table::Text
+      run: |
+        sudo cpan install -T Data::Table::Text
+
+    - name: Install GitHub::Crud
+      run: |
+        sudo cpan install -T Digest::SHA1
+
+    - name: Install tree
+      run: |
+        sudo apt-get install -y tree
+
+    - name: Test
+      run: |
+        perl lib/Tree/Trek
