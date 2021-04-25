@@ -1,4 +1,4 @@
-# Test TreeTrek 2021-04-25 at 05:20:03
+# Test TreeTrek 2021-04-25 at 05:20:56
 
 name: Test
 
@@ -26,4 +26,4 @@ jobs:
 
     - name: Test
       run: |
-        perl lib/Tree/Trek
+        perl lib/Tree/Trek.pm
