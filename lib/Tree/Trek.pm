@@ -5,7 +5,7 @@
 #-------------------------------------------------------------------------------
 # podDocumentation
 package Tree::Trek;
-our $VERSION = "20210424";
+our $VERSION = "20210425";
 use warnings FATAL => qw(all);
 use strict;
 use Carp qw(confess cluck);
@@ -657,7 +657,7 @@ test unless caller;
 
 1;
 # podDocumentation
-#__DATA__
+__DATA__
 use Time::HiRes qw(time);
 use Test::More;
 
