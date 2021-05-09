@@ -17,63 +17,82 @@ my $debug = -e q(/home/phil/);                                                  
 
 #D1 Tree::Trek                                                                  # Methods to create and traverse a trekkable tree.
 
-sub node(;$$)                                                                   # Create a new node
- {my ($parent, $char) = @_;                                                     # Optional parent, character we came through on
+sub node(;$$$$)                                                                 # Create a new node
+ {my ($parent, $char, $key, $data) = @_;                                        # Optional parent, optional character we came through on, optional key for node, optional data for node
   genHash(__PACKAGE__,
-    jumps  => {},                                                               # {character => node}
-    data   => undef,                                                            # The data attached to this node
+    jumps  => undef,                                                            # {character => node}
+    key    => $key,                                                             # The key if this node represents a complete key rather than a partial key
+    data   => $data,                                                            # The data attached to this node if this node represents a complete key
     parent => $parent,                                                          # The node from whence we came
-    char   => $char//'',                                                        # The character we trekked in on or the empty string if we are at the root
+    char   => $char,                                                            # The character we trekked in on or the empty string if we are at the root
+    depth  => $parent ? $parent->depth + 1 : 0,                                 # Depth of this node
    );
  }
 
-sub put($$)                                                                     # Add a key to the tree
- {my ($tree, $key) = @_;                                                        # Tree, key
-
-  return $tree unless $key;                                                     # Key is empty so we have found the desired node
+sub put($$;$)                                                                   # Add a key to the tree
+ {my ($tree, $key, $data) = @_;                                                 # Tree, key, optional data
+  my $t = $tree;
 
   for my $i(1..length $key)                                                     # Jump on each character
    {my $c = substr $key, $i-1, 1;                                               # Next character of the key
 
-    if (exists $tree->jumps->{$c})                                              # Jump through existing node
-     {$tree = $tree->jumps->{$c};
+    if (!defined(my $k = $t->key))                                              # Use empty data slot if available to store remainder of the key
+     {$t->key  = $key;                                                          # Key
+      $t->data = $data;                                                         # Data (if present) tracks key
+      return $t;                                                                # Return node updated
+     }
+    elsif (defined($k) and $k eq $key)                                          # Node represents a complete key that matches the specified key
+     {$t->data = $data;                                                         # Update data
+      return $t;                                                                # Return node updated
+     }
+    elsif (exists $t->jumps->{$c})                                              # Jump through existing node
+     {$t = $t->jumps->{$c};
      }
     else                                                                        # Create a new node and jump through it
-     {$tree = ($tree->jumps->{$c} = node $tree, $c);
+     {$t = ($t->jumps->{$c} = node $t, $c, $key, $data);
+      return $t;                                                                # Return node updated
      }
    }
 
-  $tree                                                                         # Last node we reached at the end of the string
- }
-
-sub key($)                                                                      # Return the key of a node
- {my ($node) = @_;                                                              # Node
-  my $k = '';
-  for(my $n = $node; $n; $n = $n->parent)
-   {$k .= $n->char
+  if (defined(my $k = $t->key))                                                 # Move any data in the final slot if necessary
+   {if ($k eq $key)                                                             # Node represents a complete key that matches the specified key
+     {$t->data = $data;                                                         # Update data
+      return $t;                                                                # Return node updated
+     }
+    else                                                                        # Reinsert key that was here because it is longer and so really belongs further down the tree
+     {my $d = $t->data; $t->key = $key; $t->data = $data; $t->put($k, $d);
+      return $t;                                                                # Return node updated
+     }
    }
-  scalar reverse $k;
+  else                                                                          # Final slot is empty
+   {$t->key  = $key;                                                            # Node represents a complete key that matches the specified key
+    $t->data = $data;                                                           # Update data
+    return $t;                                                                  # Return node updated
+   }
  }
 
 sub find($$)                                                                    # Find a key in a tree - return its node if such a node exists else undef
  {my ($tree, $key) = @_;                                                        # Tree, key
 
-  return $tree unless $key;                                                     # We have exhausted the key so this must be the node in question as long as it has no jumps
+  return $tree if defined($tree->key) and $tree->key eq $key;                   # Start node contains the key
 
   for my $i(1..length $key)                                                     # Jump on each character
    {my $c = substr $key, $i-1, 1;                                               # Next character of the key
     if (exists $tree->jumps->{$c})                                              # Continue search
-     {$tree = $tree->jumps->{$c};
-      next;
+     {$tree = $tree->jumps->{$c};                                               # Jump
+      return $tree if defined($tree->key) and $tree->key eq $key;               # Start node contains the key
      }
-    return undef;                                                               # No such jump
+    else
+     {return undef;                                                             # No such jump
+     }
    }
-  $tree                                                                         # Not found
+  undef                                                                         # Not found
  }
 
 sub delete($)                                                                   # Remove a node from a tree
  {my ($node) = @_;                                                              # Node to be removed
 
+  $node->key  = undef;                                                          # Clear key
   $node->data = undef;                                                          # Clear data
   if (! keys $node->jumps->%*)                                                  # No jumps from this node and no data so we can clear it from the parent
    {for(my $n = $node; $n; $n = $n->parent)                                     # Up through ancestors
@@ -114,9 +133,9 @@ use Exporter qw(import);
 
 use vars qw(@ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
-@ISA          = qw(Exporter);
-@EXPORT       = qw();
-@EXPORT_OK    = qw(
+@ISA         = qw(Exporter);
+@EXPORT      = qw();
+@EXPORT_OK   = qw(
  );
 %EXPORT_TAGS = (all=>[@EXPORT, @EXPORT_OK]);
 
@@ -135,16 +154,16 @@ Create a trekkable tree and trek through it:
 
   my $n = node;
 
-  $n->put("aa") ->data = "AA";
-  $n->put("ab") ->data = "AB";
-  $n->put("ba") ->data = "BA";
-  $n->put("bb") ->data = "BB";
-  $n->put("aaa")->data = "AAA";
+  $n->put("aa" , "AA");
+  $n->put("ab" , "AB");
+  $n->put("ba" , "BA");
+  $n->put("bb" , "BB");
+  $n->put("aaa", "AAA");
 
   is_deeply [map {[$_->key, $_->data]} $n->traverse],
    [["aa",  "AA"],
-    ["aaa", "AAA"],
     ["ab",  "AB"],
+    ["aaa", "AAA"],
     ["ba",  "BA"],
     ["bb",  "BB"]];
 
@@ -657,7 +676,7 @@ test unless caller;
 
 1;
 # podDocumentation
-__DATA__
+#__DATA__
 use Time::HiRes qw(time);
 use Test::More;
 
@@ -666,7 +685,7 @@ my $localTest = ((caller(1))[0]//'Tree::Trek') eq "Tree::Trek";                 
 Test::More->builder->output("/dev/null") if $localTest;                         # Reduce number of confirmation messages during testing
 
 if ($^O =~ m(bsd|linux)i)                                                       # Supported systems
- {plan tests => 30;
+ {plan tests => 33;
  }
 else
  {plan skip_all =>qq(Not supported on: $^O);
@@ -676,41 +695,43 @@ my $start = time;                                                               
 
 #goto latest;
 
+if (1)
+ {my $n = node;
+  $n->put("aa", "AA");
+  $n->put("a",  "A");
+  is_deeply $n->find("a") ->key, "a";  is_deeply $n->find("a") ->data, "A";
+  is_deeply $n->find("aa")->key, "aa"; is_deeply $n->find("aa")->data, "AA";
+ }
+
 if (1)                                                                          #Tnode #Tput #Tfind #Tcount #Ttraverse #Tdelete #Tkey
  {my $n = node;
-  $n->put("aa")->data = "AA";
-  $n->put("ab")->data = "AB";
-  $n->put("ba")->data = "BA";
-  $n->put("bb")->data = "BB";
-  $n->put("aaa")->data = "AAA";
+  $n->put("aa" , "AA");
+  $n->put("ab" , "AB");
+  $n->put("ba" , "BA");
+  $n->put("bb" , "BB");
+  $n->put("aaa", "AAA");
+
   is_deeply $n->count, 5;
 
-  is_deeply $n->find("aa") ->data, "AA";
-  is_deeply $n->find("ab") ->data, "AB";
-  is_deeply $n->find("ba") ->data, "BA";
-  is_deeply $n->find("bb") ->data, "BB";
-  is_deeply $n->find("aaa")->data, "AAA";
+  ok !$n->find("a");
+
+  is_deeply $n->find("aa") ->key, "aa";   is_deeply $n->find("aa") ->data, "AA";
+  is_deeply $n->find("ab") ->key, "ab";   is_deeply $n->find("ab") ->data, "AB";
+  is_deeply $n->find("ba") ->key, "ba";   is_deeply $n->find("ba") ->data, "BA";
+  is_deeply $n->find("bb") ->key, "bb";   is_deeply $n->find("bb") ->data, "BB";
+  is_deeply $n->find("aaa")->key, "aaa";  is_deeply $n->find("aaa")->data, "AAA";
 
   is_deeply [map {[$_->key, $_->data]} $n->traverse],
    [["aa",  "AA"],
-    ["aaa", "AAA"],
     ["ab",  "AB"],
+    ["aaa", "AAA"],
     ["ba",  "BA"],
     ["bb",  "BB"]];
 
-  ok  $n->find("a");
-  ok !$n->find("a")->data;
-  ok  $n->find("b");
-  ok !$n->find("b")->data;
-  ok !$n->find("c");
-
-  ok $n->find("aa")->delete;  ok  $n->find("aa");  is_deeply $n->count, 4;
+  ok $n->find("aa")->delete;  ok !$n->find("aa");  is_deeply $n->count, 4;
   ok $n->find("ab")->delete;  ok !$n->find("ab");  is_deeply $n->count, 3;
   ok $n->find("ba")->delete;  ok !$n->find("ba");  is_deeply $n->count, 2;
   ok $n->find("bb")->delete;  ok !$n->find("bb");  is_deeply $n->count, 1;
-
-  ok  $n->find("a");
-  ok !$n->find("b");
 
   ok $n->find("aaa")->delete; ok !$n->find("aaa"); is_deeply $n->count, 0;
   ok  !$n->find("a");
